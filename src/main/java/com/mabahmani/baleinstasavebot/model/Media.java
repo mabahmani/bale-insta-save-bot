@@ -1,10 +1,19 @@
 package com.mabahmani.baleinstasavebot.model;
 
 public class Media {
+    String id;
     String url;
     User user;
     String caption;
     MediaType mediaType;
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
 
     public String getUrl() {
         return url;
@@ -41,7 +50,8 @@ public class Media {
     @Override
     public String toString() {
         return "Media{" +
-                "url='" + url + '\'' +
+                "id='" + id + '\'' +
+                ", url='" + url + '\'' +
                 ", user=" + user +
                 ", caption='" + caption + '\'' +
                 ", mediaType=" + mediaType +

@@ -6,6 +6,7 @@ import com.mabahmani.baleinstasavebot.model.MediaType;
 import com.mabahmani.baleinstasavebot.model.User;
 import com.mabahmani.baleinstasavebot.model.WebhookUpdate;
 import com.mabahmani.baleinstasavebot.okhttp.OkHttpClient;
+import okhttp3.MultipartBody;
 import okhttp3.Request;
 import okhttp3.Response;
 import org.json.JSONArray;
@@ -14,9 +15,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.channels.Channels;
+import java.nio.channels.FileChannel;
+import java.nio.channels.ReadableByteChannel;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,7 +38,7 @@ public class MainController {
     String movieCameraEmoji = "\uD83C\uDFA5";
     String infoEmoji = "\uD83D\uDD39";
 
-    public MainController(){
+    public MainController() {
         numberEmojis[0] = "1️⃣";
         numberEmojis[1] = "2️⃣";
         numberEmojis[2] = "3️⃣";
@@ -59,13 +65,15 @@ public class MainController {
         if (checkIfMessageTextIsInstagramValidLink(text.toLowerCase())) {
             List<Media> medias = extractMediaLinks(text);
             if (medias != null && !medias.isEmpty()) {
-                editMessage(generateDownloadMessageText(medias), update.getMessage().getChat().getId(), messageId);
+                editMessage(generateDownloadAllMessageText(medias), update.getMessage().getChat().getId(), messageId);
+                downloadMediaAndUploadBale(medias, update.getMessage().getChat().getId(), update.getMessage().getMessage_id());
             } else {
                 editMessage(
                         generateErrorMessageText("مشکلی در پردازش لینک به وجود آمده است، ممکن است این لینک مربوط به یک پیج خصوصی باشد."),
-                         update.getMessage().getChat().getId(), messageId
+                        update.getMessage().getChat().getId(), messageId
                 );
             }
+
             return extractMediaLinks(text);
         } else {
             editMessage(
@@ -73,6 +81,19 @@ public class MainController {
                     , update.getMessage().getChat().getId(), messageId
             );
             return new ArrayList<>();
+        }
+    }
+
+    private Boolean checkIfMessageTextIsInstagramValidLink(String text) {
+        if (text.contains("instagram.com")) {
+            try {
+                new URL(text);
+                return true;
+            } catch (MalformedURLException exception) {
+                return false;
+            }
+        } else {
+            return false;
         }
     }
 
@@ -132,14 +153,15 @@ public class MainController {
                         String caption = item.getJSONObject("caption").getString("text");
                         String username = item.getJSONObject("user").getString("username");
                         String fullName = item.getJSONObject("user").getString("full_name");
-
                         int mediaType = item.getInt("media_type");
+                        String pk = String.valueOf(item.get("pk"));
 
                         if (productType.equals("carousel_container") || mediaType == 8) {
                             JSONArray carouselMedias = item.getJSONArray("carousel_media");
                             for (int i = 0; i < carouselMedias.length(); i++) {
                                 JSONObject carouselMedia = carouselMedias.getJSONObject(i);
                                 int carouselMediaType = carouselMedia.getInt("media_type");
+                                String carouselPk = String.valueOf(carouselMedia.get("pk"));
                                 if (carouselMediaType == 1) {
                                     JSONArray images = carouselMedia.getJSONObject("image_versions2").getJSONArray("candidates");
                                     String bestQualityImageUrl = "";
@@ -153,6 +175,7 @@ public class MainController {
                                     }
 
                                     Media media = new Media();
+                                    media.setId(carouselPk);
                                     media.setMediaType(MediaType.IMAGE);
                                     media.setUrl(bestQualityImageUrl);
                                     media.setCaption(caption);
@@ -177,6 +200,7 @@ public class MainController {
 
                                     Media media = new Media();
                                     media.setMediaType(MediaType.VIDEO);
+                                    media.setId(carouselPk);
                                     media.setUrl(bestQualityVideoUrl);
                                     media.setCaption(caption);
                                     User user = new User();
@@ -189,6 +213,7 @@ public class MainController {
 
                             }
                         } else {
+
                             if (mediaType == 1) {
                                 JSONArray images = item.getJSONObject("image_versions2").getJSONArray("candidates");
                                 String bestQualityImageUrl = "";
@@ -202,6 +227,7 @@ public class MainController {
                                 }
 
                                 Media media = new Media();
+                                media.setId(pk);
                                 media.setMediaType(MediaType.IMAGE);
                                 media.setUrl(bestQualityImageUrl);
                                 media.setCaption(caption);
@@ -225,6 +251,7 @@ public class MainController {
                                 }
 
                                 Media media = new Media();
+                                media.setId(pk);
                                 media.setMediaType(MediaType.VIDEO);
                                 media.setUrl(bestQualityVideoUrl);
                                 media.setCaption(caption);
@@ -273,8 +300,8 @@ public class MainController {
                         String caption = item.getJSONObject("caption").getString("text");
                         String username = item.getJSONObject("user").getString("username");
                         String fullName = item.getJSONObject("user").getString("full_name");
-
                         int mediaType = item.getInt("media_type");
+                        String pk = String.valueOf(item.get("pk"));
 
                         if (mediaType == 1) {
                             JSONArray images = item.getJSONObject("image_versions2").getJSONArray("candidates");
@@ -289,6 +316,7 @@ public class MainController {
                             }
 
                             Media media = new Media();
+                            media.setId(pk);
                             media.setMediaType(MediaType.IMAGE);
                             media.setUrl(bestQualityImageUrl);
                             media.setCaption(caption);
@@ -312,6 +340,7 @@ public class MainController {
                             }
 
                             Media media = new Media();
+                            media.setId(pk);
                             media.setMediaType(MediaType.VIDEO);
                             media.setUrl(bestQualityVideoUrl);
                             media.setCaption(caption);
@@ -332,19 +361,6 @@ public class MainController {
 
 
         return medias;
-    }
-
-    private Boolean checkIfMessageTextIsInstagramValidLink(String text) {
-        if (text.contains("instagram.com")) {
-            try {
-                new URL(text);
-                return true;
-            } catch (MalformedURLException exception) {
-                return false;
-            }
-        } else {
-            return false;
-        }
     }
 
     private Long sendMessage(String text, Long chatId, Long replyId) {
@@ -401,32 +417,125 @@ public class MainController {
 
     }
 
-
-    private String generateDownloadMessageText(List<Media> medias){
+    private String generateDownloadAllMessageText(List<Media> medias) {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append(
                 String.format("%s *%s* | *%s*\n\n%s %s\n\n", userEmoji, medias.get(0).getUser().getUsername(), medias.get(0).getUser().getFullName(), captionEmoji, medias.get(0).getCaption())
         );
-        for (int i=0; i<medias.size(); i++){
-            if (i < 10){
+        for (int i = 0; i < medias.size(); i++) {
+            if (i < 10) {
                 String mediaTypeEmoji = "";
                 if (medias.get(i).getMediaType() == MediaType.IMAGE)
                     mediaTypeEmoji = cameraEmoji;
                 else
                     mediaTypeEmoji = movieCameraEmoji;
                 stringBuilder.append(
-                        String.format("%s %s *[%s](%s)*\n\n", numberEmojis[i], mediaTypeEmoji, "لینک دانلود" , medias.get(i).getUrl())
+                        String.format("%s %s [%s](%s)\n\n", numberEmojis[i], mediaTypeEmoji, "لینک دانلود", medias.get(i).getUrl())
                 );
             }
         }
         return stringBuilder.toString();
     }
 
-    private String generateErrorMessageText(String message){
+    private String generateDownloadMediaMessageText(Media media) {
+        StringBuilder stringBuilder = new StringBuilder();
+        String mediaTypeEmoji = "";
+        if (media.getMediaType() == MediaType.IMAGE)
+            mediaTypeEmoji = cameraEmoji;
+        else
+            mediaTypeEmoji = movieCameraEmoji;
+
+        stringBuilder.append(
+                String.format("%s *%s* | *%s*\n\n%s [%s](%s)", userEmoji, media.getUser().getUsername(), media.getUser().getFullName(),mediaTypeEmoji,"لینک دانلود", media.getUrl())
+        );
+
+        return stringBuilder.toString();
+    }
+
+    private String generateErrorMessageText(String message) {
         return String.format("%s *%s*", redDotEmoji, message);
     }
 
-    private String generateInfoMessageText(String message){
+    private String generateInfoMessageText(String message) {
         return String.format("%s *%s*", infoEmoji, message);
     }
+
+    private void downloadMediaAndUploadBale(List<Media> medias, Long chatId, Long replyId) {
+        for (Media media : medias) {
+            try {
+                String fileName;
+                if (media.getMediaType() == MediaType.VIDEO) {
+                    fileName = media.getId() + ".mp4";
+                } else {
+                    fileName = media.getId() + ".jpg";
+                }
+                ReadableByteChannel readableByteChannel = Channels.newChannel(new URL(media.getUrl()).openStream());
+                FileOutputStream fileOutputStream = new FileOutputStream(fileName);
+                FileChannel fileChannel = fileOutputStream.getChannel();
+                fileChannel.transferFrom(readableByteChannel, 0, Long.MAX_VALUE);
+                fileOutputStream.close();
+                if (media.getMediaType() == MediaType.VIDEO) {
+                    sendVideo(new File(fileName), generateDownloadMediaMessageText(media), chatId, replyId);
+                } else {
+                    sendImage(new File(fileName), generateDownloadMediaMessageText(media), chatId, replyId);
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+        }
+
+    }
+
+    private void sendVideo(File file, String text, Long chatId, Long replyId) {
+        try {
+            okhttp3.RequestBody requestBody = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("video", file.getName(), okhttp3.RequestBody.create(okhttp3.MediaType.parse("application/octet-stream"), file))
+                    .addFormDataPart("chat_id", String.valueOf(chatId))
+                    .addFormDataPart("caption", text)
+                    .addFormDataPart("reply_to_message_id", String.valueOf(replyId))
+                    .build();
+
+            Response response = OkHttpClient.getInstance().newCall(
+                    new Request.Builder()
+                            .post(requestBody)
+                            .url(String.format("https://tapi.bale.ai/bot%s/sendVideo", BaleInstaSaveBotApplication.botToken)).build()
+            ).execute();
+
+            file.delete();
+
+        } catch (IOException exception) {
+            exception.printStackTrace();
+            file.delete();
+        }
+    }
+
+    private void sendImage(File file, String text, Long chatId, Long replyId) {
+        try {
+            okhttp3.RequestBody requestBody = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("photo", file.getName(), okhttp3.RequestBody.create(okhttp3.MediaType.parse("application/octet-stream"), file))
+                    .addFormDataPart("chat_id", String.valueOf(chatId))
+                    .addFormDataPart("caption", text)
+                    .addFormDataPart("reply_to_message_id", String.valueOf(replyId))
+                    .build();
+
+            Response response = OkHttpClient.getInstance().newCall(
+                    new Request.Builder()
+                            .post(requestBody)
+                            .url(String.format("https://tapi.bale.ai/bot%s/sendPhoto", BaleInstaSaveBotApplication.botToken)).build()
+            ).execute();
+
+            file.delete();
+
+        } catch (IOException exception) {
+            exception.printStackTrace();
+
+            file.delete();
+        }
+
+    }
+
 }
