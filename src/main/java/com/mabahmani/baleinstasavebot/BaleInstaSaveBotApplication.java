@@ -29,7 +29,7 @@ public class BaleInstaSaveBotApplication implements CommandLineRunner {
             userAgent = env.getProperty("userAgent");
             cookie = env.getProperty("cookie");
         }catch (Exception ex){
-            ex.printStackTrace();
+            //
         }
     }
 }

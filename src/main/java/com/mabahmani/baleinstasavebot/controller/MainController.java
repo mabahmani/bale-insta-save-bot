@@ -56,32 +56,43 @@ public class MainController {
             @RequestBody WebhookUpdate update
     ) {
 
-        Long messageId = sendMessage(
-                generateInfoMessageText("در حال بررسی لینک ...")
-                , update.getMessage().getChat().getId(), update.getMessage().getMessage_id());
+        if (update.getMessage().getText().equals("/start")){
+            sendMessage(
+                    generateInfoMessageText("برای دریافات لینک دانلود مدیا، لینک کپی شده از اینستاگرام را پیست کنید.")
+                    , update.getMessage().getChat().getId(), update.getMessage().getMessage_id());
+        }
 
-        String text = update.getMessage().getText();
+        else {
+            Long messageId = sendMessage(
+                    generateInfoMessageText("در حال بررسی لینک ...")
+                    , update.getMessage().getChat().getId(), update.getMessage().getMessage_id());
 
-        if (checkIfMessageTextIsInstagramValidLink(text.toLowerCase())) {
-            List<Media> medias = extractMediaLinks(text);
-            if (medias != null && !medias.isEmpty()) {
-                editMessage(generateDownloadAllMessageText(medias), update.getMessage().getChat().getId(), messageId);
-                downloadMediaAndUploadBale(medias, update.getMessage().getChat().getId(), update.getMessage().getMessage_id());
+            String text = update.getMessage().getText();
+
+            if (checkIfMessageTextIsInstagramValidLink(text.toLowerCase())) {
+                List<Media> medias = extractMediaLinks(text);
+                if (medias != null && !medias.isEmpty()) {
+                    editMessage(generateDownloadAllMessageText(medias), update.getMessage().getChat().getId(), messageId);
+                    downloadMediaAndUploadBale(medias, update.getMessage().getChat().getId(), update.getMessage().getMessage_id());
+                } else {
+                    editMessage(
+                            generateErrorMessageText("مشکلی در پردازش لینک به وجود آمده است، ممکن است این لینک مربوط به یک پیج خصوصی باشد."),
+                            update.getMessage().getChat().getId(), messageId
+                    );
+                }
+
+                return extractMediaLinks(text);
             } else {
                 editMessage(
-                        generateErrorMessageText("مشکلی در پردازش لینک به وجود آمده است، ممکن است این لینک مربوط به یک پیج خصوصی باشد."),
-                        update.getMessage().getChat().getId(), messageId
+                        generateErrorMessageText("لینک اشتباه است")
+                        , update.getMessage().getChat().getId(), messageId
                 );
+                return new ArrayList<>();
             }
-
-            return extractMediaLinks(text);
-        } else {
-            editMessage(
-                    generateErrorMessageText("لینک اشتباه است")
-                    , update.getMessage().getChat().getId(), messageId
-            );
-            return new ArrayList<>();
         }
+
+        return new ArrayList<>();
+
     }
 
     private Boolean checkIfMessageTextIsInstagramValidLink(String text) {
